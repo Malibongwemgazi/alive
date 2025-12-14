@@ -1,0 +1,96 @@
+@page "/"
+@inject NavigationManager Navigation
+@inject ILocalStorageService LocalStorage
+
+<PageTitle>Pill Reminder App</PageTitle>
+
+<div class="container mt-5">
+    <div class="text-center">
+        <h1 class="display-4 mb-4">💊 Pill Reminder & Health Assistant</h1>
+        <p class="lead mb-4">Your personal healthcare companion for medication reminders and doctor recommendations</p>
+        
+        <div class="row mt-5">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow">
+                    <div class="card-body text-center">
+                        <i class="bi bi-alarm text-primary" style="font-size: 3rem;"></i>
+                        <h3 class="card-title mt-3">Pill Reminders</h3>
+                        <p class="card-text">Set up medication reminders based on doctor's instructions</p>
+                        <button class="btn btn-primary" @onclick="NavigateToReminders">Set Reminders</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow">
+                    <div class="card-body text-center">
+                        <i class="bi bi-chat-dots text-success" style="font-size: 3rem;"></i>
+                        <h3 class="card-title mt-3">Health Chatbot</h3>
+                        <p class="card-text">Talk to AI assistant for health advice and home remedies</p>
+                        <button class="btn btn-success" @onclick="NavigateToChatbot">Start Chat</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow">
+                    <div class="card-body text-center">
+                        <i class="bi bi-hospital text-danger" style="font-size: 3rem;"></i>
+                        <h3 class="card-title mt-3">Find Doctors</h3>
+                        <p class="card-text">Find nearby doctors and emergency contacts</p>
+                        <button class="btn btn-danger" @onclick="NavigateToDoctors">Find Doctors</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        @if (!_isLocationGranted)
+        {
+            <div class="alert alert-warning mt-4">
+                <h5>📍 Location Access Required</h5>
+                <p>Please enable location access to find doctors near you and get accurate reminders.</p>
+                <button class="btn btn-warning" @onclick="RequestLocation">Enable Location</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _isLocationGranted = false;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckLocationPermission();
+    }
+    
+    private async Task CheckLocationPermission()
+    {
+        // Check if location is already granted
+        var hasLocation = await LocalStorage.GetItemAsync<bool>("locationGranted");
+        _isLocationGranted = hasLocation;
+    }
+    
+    private async Task RequestLocation()
+    {
+        // In a real app, this would use JavaScript interop to request location
+        // For now, we'll simulate it
+        await LocalStorage.SetItemAsync("locationGranted", true);
+        _isLocationGranted = true;
+        StateHasChanged();
+    }
+    
+    private void NavigateToReminders()
+    {
+        Navigation.NavigateTo("/reminders");
+    }
+    
+    private void NavigateToChatbot()
+    {
+        Navigation.NavigateTo("/chatbot");
+    }
+    
+    private void NavigateToDoctors()
+    {
+        Navigation.NavigateTo("/doctors");
+    }
+}
