@@ -1,0 +1,182 @@
+@page "/reminders"
+@inject IPillReminderService ReminderService
+@inject ILocalStorageService LocalStorage
+@implements IDisposable
+
+<PageTitle>Pill Reminders</PageTitle>
+
+<div class="container mt-4">
+    <h2>💊 Medication Reminders</h2>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Set New Reminder</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Medicine Name</label>
+                        <input @bind="_newReminder.MedicineName" class="form-control" placeholder="e.g., Amoxicillin" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Sickness Type</label>
+                        <input @bind="_newReminder.SicknessType" class="form-control" placeholder="e.g., Sinus Infection" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Doctor's Instructions</label>
+                        <textarea @bind="_newReminder.DoctorInstructions" class="form-control" rows="3" 
+                                  placeholder="e.g., Take 1 pill every 8 hours after meals"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" @bind="_newReminder.StartDate" class="form-control" 
+                                   @bind:format="yyyy-MM-dd" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">End Date</label>
+                            <input type="date" @bind="_newReminder.EndDate" class="form-control" 
+                                   @bind:format="yyyy-MM-dd" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Dosage</label>
+                        <input @bind="_newReminder.Dosage" class="form-control" placeholder="e.g., 500mg" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reminder Times</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="_morning" />
+                            <label class="form-check-label">Morning (8:00 AM)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="_afternoon" />
+                            <label class="form-check-label">Afternoon (2:00 PM)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="_evening" />
+                            <label class="form-check-label">Evening (8:00 PM)</label>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" @onclick="AddReminder" :disabled="_isAdding">
+                        @if (_isAdding)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                        }
+                        Add Reminder
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Today's Reminders</h5>
+                </div>
+                <div class="card-body">
+                    @if (_todayReminders.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var reminder in _todayReminders)
+                            {
+                                <div class="list-group-item list-group-item-action">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">@reminder.MedicineName</h6>
+                                        <small>@reminder.Dosage</small>
+                                    </div>
+                                    <p class="mb-1">@reminder.DoctorInstructions</p>
+                                    <small>For: @reminder.SicknessType</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No reminders for today. Add your first reminder!</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Reminder _newReminder = new Reminder();
+    private List<Reminder> _todayReminders = new List<Reminder>();
+    private bool _isAdding = false;
+    private bool _morning = false;
+    private bool _afternoon = false;
+    private bool _evening = false;
+    private Timer _reminderTimer;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReminders();
+        
+        // Start reminder timer
+        _reminderTimer = new Timer(async _ => 
+        {
+            await InvokeAsync(async () =>
+            {
+                await ReminderService.CheckAndSendRemindersAsync();
+                await LoadReminders();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+    }
+    
+    private async Task LoadReminders()
+    {
+        var userId = await LocalStorage.GetItemAsync<string>("userId") ?? "default-user";
+        _todayReminders = await ReminderService.GetTodayRemindersAsync(userId);
+    }
+    
+    private async Task AddReminder()
+    {
+        _isAdding = true;
+        
+        try
+        {
+            var userId = await LocalStorage.GetItemAsync<string>("userId") ?? "default-user";
+            _newReminder.PatientId = userId;
+            
+            // Create schedule
+            var schedule = new Schedule();
+            if (_morning) schedule.Times.Add(new TimeSpan(8, 0, 0));
+            if (_afternoon) schedule.Times.Add(new TimeSpan(14, 0, 0));
+            if (_evening) schedule.Times.Add(new TimeSpan(20, 0, 0));
+            schedule.Days = Enum.GetValues<DayOfWeek>().ToList();
+            
+            _newReminder.Schedule = System.Text.Json.JsonSerializer.Serialize(schedule);
+            
+            await ReminderService.CreateReminderAsync(_newReminder);
+            
+            // Reset form
+            _newReminder = new Reminder();
+            _morning = _afternoon = _evening = false;
+            
+            await LoadReminders();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isAdding = false;
+        }
+    }
+    
+    public void Dispose()
+    {
+        _reminderTimer?.Dispose();
+    }
+}
